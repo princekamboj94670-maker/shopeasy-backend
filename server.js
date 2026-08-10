@@ -1,7 +1,8 @@
-require("dotenv").config();
+Require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const crypto = require("crypto");
 const Razorpay = require("razorpay");
 
 const app = express();
@@ -69,15 +70,9 @@ app.post("/api/payment/create-order", async (req, res) => {
         }
 
         const options = {
-
             amount: Math.round(Number(amount) * 100),
-
             currency: "INR",
-
-            receipt:
-                "shopeasy_" +
-                Date.now()
-
+            receipt: "shopeasy_" + Date.now()
         };
 
         const order =
@@ -98,7 +93,110 @@ app.post("/api/payment/create-order", async (req, res) => {
     } catch (error) {
 
         console.error(
-            "Razorpay Error:",
+            "Create Order Error:",
+            error
+        );
+
+        res.status(500).json({
+
+            success: false,
+
+            message: "Unable to create payment order"
+
+        });
+
+    }
+
+});
+
+
+// ===============================
+// VERIFY RAZORPAY PAYMENT
+// ===============================
+
+app.post("/api/payment/verify", (req, res) => {
+
+    try {
+
+        const {
+            razorpay_order_id,
+            razorpay_payment_id,
+            razorpay_signature
+        } = req.body;
+
+
+        if (
+            !razorpay_order_id ||
+            !razorpay_payment_id ||
+            !razorpay_signature
+        ) {
+
+            return res.status(400).json({
+
+                success: false,
+
+                message:
+                    "Payment details missing"
+
+            });
+
+        }
+
+
+        const generatedSignature =
+            crypto
+                .createHmac(
+                    "sha256",
+                    process.env.RAZORPAY_KEY_SECRET
+                )
+                .update(
+                    razorpay_order_id +
+                    "|" +
+                    razorpay_payment_id
+                )
+                .digest("hex");
+
+
+        if (
+            generatedSignature !==
+            razorpay_signature
+        ) {
+
+            return res.status(400).json({
+
+                success: false,
+
+                message:
+                    "Payment verification failed"
+
+            });
+
+        }
+
+
+        console.log(
+            "✅ Payment Verified:",
+            razorpay_payment_id
+        );
+
+
+        res.json({
+
+            success: true,
+
+            message:
+                "Payment verified successfully ✅",
+
+            paymentId:
+                razorpay_payment_id
+
+        });
+
+
+    } catch (error) {
+
+        console.error(
+            "Verification Error:",
             error
         );
 
@@ -107,7 +205,7 @@ app.post("/api/payment/create-order", async (req, res) => {
             success: false,
 
             message:
-                "Unable to create payment order"
+                "Payment verification error"
 
         });
 
@@ -125,6 +223,7 @@ app.post("/api/orders", async (req, res) => {
     try {
 
         const order = req.body;
+
 
         if (
             !order.name ||
@@ -146,10 +245,12 @@ app.post("/api/orders", async (req, res) => {
 
         }
 
+
         console.log(
             "New Order:",
             order
         );
+
 
         res.status(201).json({
 
@@ -158,19 +259,22 @@ app.post("/api/orders", async (req, res) => {
             message:
                 "Order received successfully ✅",
 
-            order
+            order: order
 
         });
+
 
     } catch (error) {
 
         console.error(error);
 
+
         res.status(500).json({
 
             success: false,
 
-            message: "Server error"
+            message:
+                "Server error"
 
         });
 
